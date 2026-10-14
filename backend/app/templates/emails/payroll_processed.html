@@ -1,0 +1,14 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <h2>Payroll Processed</h2>
+    <p>Hello {{ employee_name }},</p>
+    <p>Your salary statement for {{ month_name }} {{ year }} is ready.</p>
+    <p><strong>Net Salary:</strong> {{ net_salary }}</p>
+    {% if salary_slip_url %}
+    <p><a href="{{ salary_slip_url }}">View Salary Slip</a></p>
+    {% endif %}
+    <p>This is a payroll notification, not a bank transfer confirmation.</p>
+</body>
+</html>

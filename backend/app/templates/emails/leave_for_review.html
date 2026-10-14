@@ -1,0 +1,25 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <h2>Leave Request Awaiting Review</h2>
+
+    <p>Hello HR Team,</p>
+
+    <p>A new leave request has been submitted and requires review.</p>
+
+    <p><strong>Employee:</strong> {{ employee_name }}</p>
+    <p><strong>Employee Email:</strong> {{ employee_email }}</p>
+    <p><strong>Leave Type:</strong> {{ leave_type_name }}</p>
+    <p><strong>From:</strong> {{ start_date }}</p>
+    <p><strong>To:</strong> {{ end_date }}</p>
+    <p><strong>Requested Days:</strong> {{ total_days }}</p>
+    <p><strong>Reason:</strong> {{ reason }}</p>
+
+    <p>
+        <a href="{{ review_url }}">Open HRMS Leave Management</a>
+    </p>
+
+    <p>Please review the application in the HRMS portal.</p>
+</body>
+</html>

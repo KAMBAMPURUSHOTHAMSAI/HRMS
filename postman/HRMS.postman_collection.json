@@ -1,0 +1,1096 @@
+{
+  "info": {
+    "_postman_id": "hrms-api-collection",
+    "name": "HRMS API",
+    "description": "API collection for the local HRMS FastAPI application. Use the HRMS Local environment. Start with Authentication → Login. State-changing payroll, document, leave, and email operations should only be run against local/test data. See docs/postman-guide.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000/api/v1"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login (saves access token)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Use a local test account. OAuth2PasswordRequestForm expects x-www-form-urlencoded username=email and password. This request saves access_token to the active environment.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{email}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Login succeeded\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "if (pm.response.code === 200) {",
+                  "  const payload = pm.response.json();",
+                  "  if (payload.access_token) pm.environment.set(\"accessToken\", payload.access_token);",
+                  "  if (payload.user && payload.user.id) pm.environment.set(\"userId\", String(payload.user.id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Requires a valid Bearer access token."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "List employees (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/employees",
+            "description": "Requires employee read permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Get my employee profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/employees/me",
+            "description": "Requires an employee profile linked to the logged-in account."
+          },
+          "response": []
+        },
+        {
+          "name": "Create employee (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/employees",
+            "description": "Creates a user and employee record. Use unique email/employee_code and existing departmentId/designationId values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.employee@example.test\",\n  \"password\": \"LocalTestPass123!\",\n  \"first_name\": \"Asha\",\n  \"last_name\": \"Reddy\",\n  \"employee_code\": \"EMP-POSTMAN-01\",\n  \"phone\": \"9000000000\",\n  \"department_id\": \"{{departmentId}}\",\n  \"designation_id\": \"{{designationId}}\",\n  \"joining_date\": \"2026-10-01\",\n  \"monthly_salary\": \"35000.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get employee by ID (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/employees/{{employeeId}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update employee (Admin/HR)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/employees/{{employeeId}}",
+            "description": "Update only the fields being changed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"9000000001\",\n  \"monthly_salary\": \"36000.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate employee (Admin/HR)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/employees/{{employeeId}}",
+            "description": "State-changing operation: deactivates employee and the associated user. Use only with an intended test record."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users and RBAC",
+      "item": [
+        {
+          "name": "List users (authorized roles)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/users",
+            "description": "Requires USERS.READ permission."
+          },
+          "response": []
+        },
+        {
+          "name": "List roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/roles",
+            "description": "Requires role-read permission."
+          },
+          "response": []
+        },
+        {
+          "name": "List permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/roles/permissions",
+            "description": "Use /docs if your local RBAC implementation exposes a different permission route."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Departments and Designations",
+      "item": [
+        {
+          "name": "List departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/departments",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/departments",
+            "description": "Example payload; confirm required fields from /docs for your local schema.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engineering\",\n  \"description\": \"Engineering department\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get department by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/departments/{{departmentId}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update department",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/departments/{{departmentId}}",
+            "description": "Example partial update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated department description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate department",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/departments/{{departmentId}}",
+            "description": "Use only when deactivating the intended test department."
+          },
+          "response": []
+        },
+        {
+          "name": "List designations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/designations",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create designation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/designations",
+            "description": "Example payload; confirm required fields from /docs for your local schema.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Software Engineer\",\n  \"department_id\": \"{{departmentId}}\",\n  \"description\": \"Engineering role\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get designation by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/designations/{{designationId}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update designation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/designations/{{designationId}}",
+            "description": "Example partial update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated designation description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate designation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/designations/{{designationId}}",
+            "description": "Use only when deactivating the intended test designation."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "My attendance history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/attendance/me?start_date=2026-10-01&end_date=2026-10-31",
+            "description": "Returns attendance records for the authenticated employee. Change the dates for your test period."
+          },
+          "response": []
+        },
+        {
+          "name": "My attendance monthly summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/attendance/me/summary?year={{year}}&month={{month}}",
+            "description": "Returns days_recorded, present_days/half_days (if present in your local summary schema), and total worked time."
+          },
+          "response": []
+        },
+        {
+          "name": "Check in",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/attendance/check-in",
+            "description": "State-changing: records check-in for the logged-in employee. Run only when a check-in is expected."
+          },
+          "response": []
+        },
+        {
+          "name": "Check out",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/attendance/check-out",
+            "description": "State-changing: records check-out and calculates working time. Requires an active check-in."
+          },
+          "response": []
+        },
+        {
+          "name": "List attendance (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/attendance?skip=0&limit=50",
+            "description": "Optional query parameters may include employee_id, department_id, start_date, end_date, skip, and limit."
+          },
+          "response": []
+        },
+        {
+          "name": "Correct attendance (Admin/HR)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/attendance/{{attendanceId}}/correction",
+            "description": "Requires authorized attendance correction. Include a meaningful correction_note and at least one corrected field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"check_in\": \"2026-10-13T09:00:00+05:30\",\n  \"check_out\": \"2026-10-13T17:30:00+05:30\",\n  \"status\": \"PRESENT\",\n  \"correction_note\": \"Correction for local Postman test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Leave Management",
+      "item": [
+        {
+          "name": "List leave types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/leave-types",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create leave type (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/leave-types",
+            "description": "Example payload; ensure code/name are unique and match your schema.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"POSTMAN-CL\",\n  \"name\": \"Postman Test Leave\",\n  \"description\": \"Local Postman test leave type\",\n  \"is_paid\": true,\n  \"annual_quota\": \"2.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update leave type (Admin/HR)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/leave-types/{{leaveTypeId}}",
+            "description": "Example partial update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated test leave type description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate leave type (Admin/HR)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/leave-types/{{leaveTypeId}}",
+            "description": "State-changing. Do not deactivate a leave type used by real records."
+          },
+          "response": []
+        },
+        {
+          "name": "Apply for leave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves",
+            "description": "Requires a valid leave type and business-valid dates. Confirm exact schema at /docs.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leave_type_id\": \"{{leaveTypeId}}\",\n  \"start_date\": \"2026-10-20\",\n  \"end_date\": \"2026-10-21\",\n  \"reason\": \"Local Postman leave workflow test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "My leave requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/leaves/me",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "My leave balances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/leaves/me/balances?year={{year}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List all leave requests (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/leaves?skip=0&limit=100",
+            "description": "Optional filters include employee_id, department_id, leave_status, start_date, and end_date."
+          },
+          "response": []
+        },
+        {
+          "name": "Get leave request by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}",
+            "description": "The employee must own the request or the caller must be Admin/HR."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve leave (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/approve",
+            "description": "State-changing; approve only a pending test request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision_note\": \"Approved in local Postman test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject leave (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/leaves/{{leaveId}}/reject",
+            "description": "Alternative to Approve; reject only a pending test request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision_note\": \"Rejected in local Postman test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payroll",
+      "item": [
+        {
+          "name": "Generate monthly payroll run (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/payroll/runs/generate",
+            "description": "State-changing. Use only a completed payroll period with local test data.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": \"{{year}}\",\n  \"month\": \"{{month}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List payroll runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payroll/runs",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Get payroll run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payroll/runs/{{payrollRunId}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Get payroll records for run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payroll/runs/{{payrollRunId}}/records",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Add payroll adjustment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/payroll/runs/{{payrollRunId}}/adjustments",
+            "description": "Example payload; confirm adjustment type/field names in /docs before running.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustment_type\": \"BONUS\",\n  \"amount\": \"1000.00\",\n  \"reason\": \"Local Postman test adjustment\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lock/finalize payroll run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/payroll/runs/{{payrollRunId}}/lock",
+            "description": "State-changing and may prevent further payroll edits. Use only on a test payroll run."
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate salary credit",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/payroll/runs/{{payrollRunId}}/simulate-credit",
+            "description": "Important: this simulates salary credit; it does not transfer money. If SMTP is configured, it can queue real employee emails. Use only with local/test accounts."
+          },
+          "response": [],
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "Salary Slips",
+      "item": [
+        {
+          "name": "Generate salary slips for payroll run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/salary-slips/payroll-runs/{{payrollRunId}}/generate",
+            "description": "May queue notification emails. Use only for a local test payroll run."
+          },
+          "response": []
+        },
+        {
+          "name": "List all salary slips (authorized roles)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/salary-slips",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "My salary slips",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/salary-slips/me",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Download salary slip PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/salary-slips/{{salarySlipId}}/download",
+            "description": "Returns a PDF file; caller must be authorized for that slip."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Employee Documents",
+      "item": [
+        {
+          "name": "List my documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/documents/me",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Upload my document",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/documents/me",
+            "description": "Body must be form-data: file (File), document_type (Text), description (Text). Accepted file extensions/signatures are PDF, PNG, JPG/JPEG; max 5 MB.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "document_type",
+                  "type": "text",
+                  "value": "OTHER"
+                },
+                {
+                  "key": "description",
+                  "type": "text",
+                  "value": "Local Postman test upload"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List all employee documents (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/documents",
+            "description": "Requires DOCUMENTS.READ_ALL permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload document for employee (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/documents/employees/{{employeeId}}",
+            "description": "Body must be form-data: file (File), document_type (Text), description (Text). Use a synthetic test file, not a real employee document.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "document_type",
+                  "type": "text",
+                  "value": "OTHER"
+                },
+                {
+                  "key": "description",
+                  "type": "text",
+                  "value": "Local Postman test upload for employee"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/documents/{{documentId}}/download",
+            "description": "Returns a file. Requires ownership or the correct privileged permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete document",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/documents/{{documentId}}",
+            "description": "State-changing: permanently removes an authorized test document. Use only on local/test data."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications and Email Logs",
+      "item": [
+        {
+          "name": "My notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/me?unread_only=false&skip=0&limit=50",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Unread notification count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/me/unread-count",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Mark one notification as read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/read",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Mark all my notifications as read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/me/read-all",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List email delivery logs (Admin/HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/admin/email-logs?status_filter=FAILED&skip=0&limit=100",
+            "description": "Remove status_filter or choose PENDING, SENT, FAILED, or SKIPPED."
+          },
+          "response": []
+        },
+        {
+          "name": "Retry failed/skipped email (Admin/HR)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/notifications/admin/email-logs/{{emailLogId}}/retry",
+            "description": "May resend an email. Only FAILED or SKIPPED items can be retried. Use only with a test recipient."
+          },
+          "response": [],
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "Reports and Exports",
+      "item": [
+        {
+          "name": "Dashboard summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/dashboard",
+            "description": "Requires REPORTS.DASHBOARD permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Attendance report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/attendance?start_date=2026-10-01&end_date=2026-10-31&skip=0&limit=500",
+            "description": "Optional filters include department_id and employee_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Export attendance report as CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/attendance/export?file_format=csv&start_date=2026-10-01&end_date=2026-10-31",
+            "description": "Returns a CSV attachment."
+          },
+          "response": []
+        },
+        {
+          "name": "Export attendance report as PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/attendance/export?file_format=pdf&start_date=2026-10-01&end_date=2026-10-31",
+            "description": "Returns a PDF attachment."
+          },
+          "response": []
+        },
+        {
+          "name": "Leave report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/leaves?start_date=2026-10-01&end_date=2026-10-31&skip=0&limit=500",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Export leave report as CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/leaves/export?file_format=csv&start_date=2026-10-01&end_date=2026-10-31",
+            "description": "Returns a CSV attachment."
+          },
+          "response": []
+        },
+        {
+          "name": "Payroll report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/payroll?year={{year}}&month={{month}}&skip=0&limit=500",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Export payroll report as CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/payroll/export?file_format=csv&year={{year}}&month={{month}}",
+            "description": "Returns a CSV attachment. Requires report export permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Export payroll report as PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/payroll/export?file_format=pdf&year={{year}}&month={{month}}",
+            "description": "Returns a PDF attachment. Requires report export permission."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "List audit logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/audit-logs?skip=0&limit=50",
+            "description": "Requires AUDIT_LOGS.READ. Optional filters: actor_user_id, action, entity_type, entity_id, start_date, end_date."
+          },
+          "response": []
+        },
+        {
+          "name": "Get audit log details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/audit-logs/{{auditLogId}}",
+            "description": "Requires AUDIT_LOGS.READ."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

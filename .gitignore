@@ -1,0 +1,86 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local secrets/environment files. Keep the examples trackable.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node / Vite
+node_modules/
+frontend/dist/
+dist/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Application logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# Local databases and exported DB dumps (do not ignore SQL migrations or schema docs)
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+
+# Private uploaded documents and generated salary-slip files
+backend/uploads/**
+!backend/uploads/.gitkeep
+backend/app/storage/**
+!backend/app/storage/.gitkeep
+backend/storage/**
+!backend/storage/.gitkeep
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Coverage/build artefacts
+coverage/
+playwright-report/
+test-results/
+**/.env
+**/.venv/
+**/venv/
+**/node_modules/
+**/__pycache__/
+backend/storage/
+storage/
+uploads/
+postman/HRMS.local.postman_environment.json
+dashboard_review.txt
+leave_types_details.txt
+leave_types_review.txt
+migration_review.txt
+my_profile_review.txt
+
+*.bak
+docs/deliverables/sample-salary-slip.pdf
+docs/demo-credentials.md

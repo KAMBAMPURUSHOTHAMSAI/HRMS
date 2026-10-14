@@ -1,0 +1,330 @@
+from calendar import monthrange
+from datetime import date, datetime
+from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.attendance import Attendance
+from app.models.employee import Employee
+from app.models.user import User
+from app.schemas.attendance import (
+    AttendanceCorrection,
+    AttendanceRead,
+    AttendanceSummary,
+)
+
+
+COMPANY_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def company_now() -> datetime:
+    return datetime.now(COMPANY_TIMEZONE)
+
+
+def get_current_employee(user: User) -> Employee:
+    employee = user.employee
+
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee profile is not configured for this account",
+        )
+
+    if not user.is_active or employee.employment_status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive employees cannot record attendance",
+        )
+
+    return employee
+
+
+def check_in(db: Session, user: User) -> Attendance:
+    employee = get_current_employee(user)
+    now = company_now()
+
+    existing = db.scalar(
+        select(Attendance).where(
+            Attendance.employee_id == employee.id,
+            Attendance.attendance_date == now.date(),
+        )
+    )
+
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Attendance has already been recorded for today",
+        )
+
+    record = Attendance(
+        employee_id=employee.id,
+        attendance_date=now.date(),
+        check_in=now,
+        status="PRESENT",
+    )
+
+    db.add(record)
+
+    try:
+        db.commit()
+        db.refresh(record)
+        return record
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Attendance has already been recorded for today",
+        ) from None
+
+
+def check_out(db: Session, user: User) -> Attendance:
+    employee = get_current_employee(user)
+    now = company_now()
+
+    record = db.scalar(
+        select(Attendance).where(
+            Attendance.employee_id == employee.id,
+            Attendance.attendance_date == now.date(),
+        )
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Check in before checking out",
+        )
+
+    if record.check_out is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Attendance has already been checked out",
+        )
+
+    if now <= record.check_in:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Check-out time must be after check-in time",
+        )
+
+    record.check_out = now
+    record.working_minutes = int(
+        (now - record.check_in).total_seconds() // 60
+    )
+
+    try:
+        db.commit()
+        db.refresh(record)
+        return record
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_my_attendance(
+    db: Session,
+    user: User,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[Attendance]:
+    employee = get_current_employee(user)
+
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_date cannot be after end_date",
+        )
+
+    statement = select(Attendance).where(
+        Attendance.employee_id == employee.id
+    )
+
+    if start_date is not None:
+        statement = statement.where(
+            Attendance.attendance_date >= start_date
+        )
+
+    if end_date is not None:
+        statement = statement.where(
+            Attendance.attendance_date <= end_date
+        )
+
+    statement = statement.order_by(Attendance.attendance_date.desc())
+
+    return list(db.scalars(statement).all())
+
+
+def get_my_monthly_summary(
+    db: Session,
+    user: User,
+    year: int,
+    month: int,
+) -> AttendanceSummary:
+    employee = get_current_employee(user)
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    records = db.scalars(
+        select(Attendance).where(
+            Attendance.employee_id == employee.id,
+            Attendance.attendance_date >= first_day,
+            Attendance.attendance_date <= last_day,
+        )
+    ).all()
+
+    total_minutes = sum(
+        record.working_minutes or 0
+        for record in records
+    )
+
+    present_days = sum(
+        1
+        for record in records
+        if (record.status or "").upper() == "PRESENT"
+    )
+
+    half_days = sum(
+        1
+        for record in records
+        if (record.status or "").upper() == "HALF_DAY"
+    )
+
+    return AttendanceSummary(
+        year=year,
+        month=month,
+        days_recorded=len(records),
+        present_days=present_days,
+        half_days=half_days,
+        total_worked_minutes=total_minutes,
+        total_worked_hours=(
+            Decimal(total_minutes) / Decimal("60")
+        ).quantize(Decimal("0.01")),
+    )
+def list_all_attendance(
+    db: Session,
+    employee_id: int | None = None,
+    department_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[Attendance]:
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_date cannot be after end_date",
+        )
+
+    statement = (
+        select(Attendance)
+        .join(Employee, Attendance.employee_id == Employee.id)
+        .options(selectinload(Attendance.employee))
+    )
+
+    if employee_id is not None:
+        statement = statement.where(
+            Attendance.employee_id == employee_id
+        )
+
+    if department_id is not None:
+        statement = statement.where(
+            Employee.department_id == department_id
+        )
+
+    if start_date is not None:
+        statement = statement.where(
+            Attendance.attendance_date >= start_date
+        )
+
+    if end_date is not None:
+        statement = statement.where(
+            Attendance.attendance_date <= end_date
+        )
+
+    statement = (
+        statement
+        .order_by(
+            Attendance.attendance_date.desc(),
+            Attendance.employee_id,
+        )
+        .offset(skip)
+        .limit(limit)
+    )
+
+    return list(db.scalars(statement).all())
+
+
+def correct_attendance(
+    db: Session,
+    attendance_id: int,
+    payload: AttendanceCorrection,
+    admin_user: User,
+) -> Attendance:
+    record = db.get(Attendance, attendance_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attendance record not found",
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    correction_note = changes.pop("correction_note").strip()
+
+    if not correction_note:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Correction reason cannot be empty",
+        )
+
+    if not changes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one attendance field to correct",
+        )
+
+    old_check_in = record.check_in
+    old_check_out = record.check_out
+
+    new_check_in = changes.get("check_in", old_check_in)
+    new_check_out = changes.get("check_out", old_check_out)
+
+    if new_check_in is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Check-in time cannot be empty",
+        )
+
+    if new_check_out is not None and new_check_out < new_check_in:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Check-out must be after check-in",
+        )
+
+    for field, value in changes.items():
+        setattr(record, field, value)
+
+    if "check_in" in changes or "check_out" in changes:
+        if record.check_out is None:
+            record.working_minutes = None
+        else:
+            record.working_minutes = int(
+                (
+                    record.check_out - record.check_in
+                ).total_seconds() // 60
+            )
+
+    record.correction_note = correction_note
+    record.corrected_by_user_id = admin_user.id
+
+    try:
+        db.commit()
+        db.refresh(record)
+        return record
+    except Exception:
+        db.rollback()
+        raise
