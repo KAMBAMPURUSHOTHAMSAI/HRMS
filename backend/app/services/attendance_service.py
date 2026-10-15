@@ -1,15 +1,18 @@
+
 from calendar import monthrange
 from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.attendance import Attendance
 from app.models.employee import Employee
+from app.models.holiday import Holiday
+from app.models.holiday_selection import HolidaySelection
 from app.models.user import User
 from app.schemas.attendance import (
     AttendanceCorrection,
@@ -41,6 +44,72 @@ def get_current_employee(user: User) -> Employee:
         )
 
     return employee
+
+
+def _get_employee_holiday_dates(
+    db: Session,
+    employee: Employee,
+    start_date: date,
+    end_date: date,
+) -> set[date]:
+    """
+    Return the unique holiday dates applicable to an employee.
+
+    COMPANY holidays apply to everyone.
+    REGIONAL holidays apply when the employee's region matches.
+    OPTIONAL holidays apply only when the employee selected them.
+    Inactive holidays are ignored.
+    """
+    applicable_types = [
+        Holiday.holiday_type == "COMPANY",
+    ]
+
+    employee_region = (employee.region or "").strip()
+
+    if employee_region:
+        applicable_types.append(
+            and_(
+                Holiday.holiday_type == "REGIONAL",
+                func.lower(func.trim(Holiday.region))
+                == employee_region.lower(),
+            )
+        )
+
+    company_and_regional_statement = select(
+        Holiday.holiday_date
+    ).where(
+        Holiday.is_active.is_(True),
+        Holiday.holiday_date >= start_date,
+        Holiday.holiday_date <= end_date,
+        or_(*applicable_types),
+    )
+
+    holiday_dates = set(
+        db.scalars(company_and_regional_statement).all()
+    )
+
+    # Optional holidays count only for active employee selections.
+    optional_statement = (
+        select(Holiday.holiday_date)
+        .join(
+            HolidaySelection,
+            HolidaySelection.holiday_id == Holiday.id,
+        )
+        .where(
+            Holiday.is_active.is_(True),
+            Holiday.holiday_type == "OPTIONAL",
+            HolidaySelection.employee_id == employee.id,
+            HolidaySelection.status == "SELECTED",
+            Holiday.holiday_date >= start_date,
+            Holiday.holiday_date <= end_date,
+        )
+    )
+
+    holiday_dates.update(
+        db.scalars(optional_statement).all()
+    )
+
+    return holiday_dates
 
 
 def check_in(db: Session, user: User) -> Attendance:
@@ -152,7 +221,9 @@ def get_my_attendance(
             Attendance.attendance_date <= end_date
         )
 
-    statement = statement.order_by(Attendance.attendance_date.desc())
+    statement = statement.order_by(
+        Attendance.attendance_date.desc()
+    )
 
     return list(db.scalars(statement).all())
 
@@ -165,16 +236,28 @@ def get_my_monthly_summary(
 ) -> AttendanceSummary:
     employee = get_current_employee(user)
 
-    first_day = date(year, month, 1)
-    last_day = date(year, month, monthrange(year, month)[1])
-
-    records = db.scalars(
-        select(Attendance).where(
-            Attendance.employee_id == employee.id,
-            Attendance.attendance_date >= first_day,
-            Attendance.attendance_date <= last_day,
+    if year < 1 or month < 1 or month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid year or month",
         )
-    ).all()
+
+    first_day = date(year, month, 1)
+    last_day = date(
+        year,
+        month,
+        monthrange(year, month)[1],
+    )
+
+    records = list(
+        db.scalars(
+            select(Attendance).where(
+                Attendance.employee_id == employee.id,
+                Attendance.attendance_date >= first_day,
+                Attendance.attendance_date <= last_day,
+            )
+        ).all()
+    )
 
     total_minutes = sum(
         record.working_minutes or 0
@@ -193,6 +276,39 @@ def get_my_monthly_summary(
         if (record.status or "").upper() == "HALF_DAY"
     )
 
+    holiday_dates = _get_employee_holiday_dates(
+        db,
+        employee,
+        first_day,
+        last_day,
+    )
+
+    # Count standard Monday-Friday working days.
+    weekdays_in_month = sum(
+        1
+        for day_number in range(1, last_day.day + 1)
+        if date(year, month, day_number).weekday() < 5
+    )
+
+    # A holiday reduces scheduled working days only when
+    # it falls on a standard weekday.
+    weekday_holidays = sum(
+        1
+        for holiday_date in holiday_dates
+        if holiday_date.weekday() < 5
+    )
+
+    scheduled_working_days = max(
+        0,
+        weekdays_in_month - weekday_holidays,
+    )
+
+    non_holiday_recorded_days = sum(
+        1
+        for record in records
+        if record.attendance_date not in holiday_dates
+    )
+
     return AttendanceSummary(
         year=year,
         month=month,
@@ -203,7 +319,12 @@ def get_my_monthly_summary(
         total_worked_hours=(
             Decimal(total_minutes) / Decimal("60")
         ).quantize(Decimal("0.01")),
+        holiday_days=len(holiday_dates),
+        scheduled_working_days=scheduled_working_days,
+        non_holiday_recorded_days=non_holiday_recorded_days,
     )
+
+
 def list_all_attendance(
     db: Session,
     employee_id: int | None = None,

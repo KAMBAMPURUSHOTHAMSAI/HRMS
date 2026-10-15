@@ -35,6 +35,12 @@ class Employee(Base):
         String(20),
         nullable=True,
     )
+    
+    region: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
 
     department_id: Mapped[int] = mapped_column(
         ForeignKey("departments.id", ondelete="RESTRICT"),

@@ -2,7 +2,13 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+)
 
 
 class EmployeeCreate(BaseModel):
@@ -19,9 +25,14 @@ class EmployeeCreate(BaseModel):
     )
 
     phone: str | None = Field(default=None, max_length=20)
+
+    # Employee's work region, used for regional holidays.
+    region: str | None = Field(default=None, max_length=120)
+
     department_id: int = Field(gt=0)
     designation_id: int = Field(gt=0)
     joining_date: date
+
     monthly_salary: Decimal = Field(
         gt=0,
         max_digits=12,
@@ -32,24 +43,58 @@ class EmployeeCreate(BaseModel):
     @classmethod
     def strip_text(cls, value: str) -> str:
         value = value.strip()
+
         if not value:
             raise ValueError("This field cannot be empty")
+
         return value
+
+    @field_validator("region")
+    @classmethod
+    def normalize_region(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        return value or None
 
 
 class EmployeeUpdate(BaseModel):
-    first_name: str | None = Field(default=None, min_length=1, max_length=100)
-    last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    first_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
+    last_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
     phone: str | None = Field(default=None, max_length=20)
+
+    # Only users with employee-update permission may change this.
+    region: str | None = Field(default=None, max_length=120)
+
     department_id: int | None = Field(default=None, gt=0)
     designation_id: int | None = Field(default=None, gt=0)
     joining_date: date | None = None
+
     monthly_salary: Decimal | None = Field(
         default=None,
         gt=0,
         max_digits=12,
         decimal_places=2,
     )
+
+    @field_validator("region")
+    @classmethod
+    def normalize_region(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        return value or None
+
 
 class EmployeeSelfUpdate(BaseModel):
     """Fields an employee is allowed to update in their own profile."""
@@ -69,6 +114,7 @@ class EmployeeSelfUpdate(BaseModel):
         max_length=20,
     )
 
+
 class EmployeeRead(BaseModel):
     id: int
     user_id: int
@@ -78,6 +124,8 @@ class EmployeeRead(BaseModel):
     first_name: str
     last_name: str
     phone: str | None
+
+    region: str | None = None
 
     department_id: int
     department_name: str

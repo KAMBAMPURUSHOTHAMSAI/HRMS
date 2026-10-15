@@ -155,10 +155,49 @@ def build_pdf(record: PayrollRecord, run: PayrollRun) -> bytes:
         )
     )
 
+    # Existing summary deductions are shown before the detailed component table.
+    story.extend([deductions_table, Spacer(1, 7 * mm)])
+
+    component_lines = list(getattr(record, "component_lines", []) or [])
+    if component_lines:
+        story.append(Paragraph("Salary Component Breakdown", styles["Heading2"]))
+        story.append(Spacer(1, 3 * mm))
+
+        component_rows = [["Code", "Component", "Type", "Amount", "Calculation Details"]]
+        for line in sorted(component_lines, key=lambda item: item.id or 0):
+            component_rows.append(
+                [
+                    Paragraph(escape(line.component_code), styles["Normal"]),
+                    Paragraph(escape(line.component_name), styles["Normal"]),
+                    Paragraph(escape(line.component_type), styles["Normal"]),
+                    money(line.amount),
+                    Paragraph(escape(line.calculation_details or "—"), styles["Normal"]),
+                ]
+            )
+
+        component_table = Table(
+            component_rows,
+            colWidths=[24 * mm, 38 * mm, 23 * mm, 26 * mm, 63 * mm],
+            repeatRows=1,
+        )
+        component_table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        story.extend([component_table, Spacer(1, 8 * mm)])
+
     story.extend(
         [
-            deductions_table,
-            Spacer(1, 8 * mm),
             Paragraph(
                 f"<b>Net Salary: {money(record.net_salary)}</b>",
                 styles["Heading2"],
@@ -211,6 +250,8 @@ def get_slip_query():
         .selectinload(Employee.designation),
         selectinload(SalarySlip.payroll_record)
         .selectinload(PayrollRecord.payroll_run),
+        selectinload(SalarySlip.payroll_record)
+        .selectinload(PayrollRecord.component_lines),
     )
 
 
@@ -271,6 +312,7 @@ def generate_salary_slips(
             .selectinload(Employee.designation),
             selectinload(PayrollRecord.payroll_run),
             selectinload(PayrollRecord.salary_slip),
+            selectinload(PayrollRecord.component_lines),
         )
         .order_by(PayrollRecord.employee_id)
     ).all()

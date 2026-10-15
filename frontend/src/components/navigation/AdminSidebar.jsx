@@ -7,7 +7,9 @@ import {
   ShieldCheck,
   CalendarCheck,
   CalendarDays,
+  Clock3,
   Wallet,
+  Calculator,
   Bell,
   FileBarChart,
   ScrollText,
@@ -47,6 +49,16 @@ const links = [
     icon: CalendarCheck,
   },
   {
+    to: "/admin/holidays",
+    label: "Holiday Management",
+    icon: CalendarDays,
+  },
+  {
+    to: "/admin/shifts",
+    label: "Shift Management",
+    icon: Clock3,
+  },
+  {
     to: "/admin/leave-types",
     label: "Leave Types",
     icon: CalendarDays,
@@ -60,6 +72,16 @@ const links = [
     to: "/admin/payroll",
     label: "Payroll",
     icon: Wallet,
+  },
+  {
+    to: "/admin/salary-components",
+    label: "Salary Components",
+    icon: Calculator,
+  },
+  {
+    to: "/admin/employee-salary-structure",
+    label: "Employee Salary Structure",
+    icon: Users,
   },
   {
     to: "/admin/notifications",

@@ -28,6 +28,35 @@ export async function markAllNotificationsRead() {
   return response.data;
 }
 
+// Get current user's notification preferences.
+export async function getMyNotificationPreferences() {
+  const response = await api.get(
+    "/notifications/me/preferences"
+  );
+
+  return response.data;
+}
+
+// Update selected notification preferences.
+export async function updateMyNotificationPreferences(payload) {
+  const response = await api.patch(
+    "/notifications/me/preferences",
+    payload
+  );
+
+  return response.data;
+}
+
+// Admin: broadcast to the organization or selected departments.
+export async function sendAdminBroadcast(payload) {
+  const response = await api.post(
+    "/notifications/admin/broadcast",
+    payload
+  );
+
+  return response.data;
+}
+
 // Admin / HR: get email delivery logs.
 export async function getEmailDeliveryLogs(params = {}) {
   const response = await api.get("/notifications/admin/email-logs", {

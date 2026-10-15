@@ -84,6 +84,7 @@ def serialize_employee(employee: Employee) -> EmployeeRead:
         first_name=employee.user.first_name,
         last_name=employee.user.last_name,
         phone=employee.phone,
+        region=employee.region,
         department_id=employee.department_id,
         department_name=employee.department.name,
         designation_id=employee.designation_id,
@@ -167,6 +168,13 @@ def create_employee(
         is_active=True,
     )
 
+    # Normalize optional region without changing existing employee fields.
+    region = (
+        payload.region.strip()
+        if payload.region and payload.region.strip()
+        else None
+    )
+
     try:
         db.add(user)
         db.flush()
@@ -182,6 +190,7 @@ def create_employee(
             user_id=user.id,
             employee_code=employee_code,
             phone=payload.phone,
+            region=region,
             department_id=payload.department_id,
             designation_id=payload.designation_id,
             joining_date=payload.joining_date,
@@ -204,7 +213,10 @@ def create_employee(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Duplicate employee data or a database constraint was violated",
+            detail=(
+                "Duplicate employee data or a database "
+                "constraint was violated"
+            ),
         ) from None
 
 
@@ -234,6 +246,15 @@ def update_employee(
 
             changes[field] = value.strip()
 
+    # Allow admins/HR to normalize or clear an employee's region.
+    if "region" in changes:
+        region = changes["region"]
+
+        if region is not None:
+            region = region.strip() or None
+
+        changes["region"] = region
+
     target_department_id = (
         changes.get("department_id")
         if changes.get("department_id") is not None
@@ -259,7 +280,9 @@ def update_employee(
         for field, value in changes.items():
             if field in ("first_name", "last_name"):
                 setattr(employee.user, field, value)
-            elif value is not None or field == "phone":
+
+            # Explicit None is permitted for optional phone/region.
+            elif value is not None or field in ("phone", "region"):
                 setattr(employee, field, value)
 
         db.commit()
@@ -272,8 +295,11 @@ def update_employee(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Unable to update employee because of a data constraint",
+            detail=(
+                "Unable to update employee because of a data constraint"
+            ),
         ) from None
+
 
 def update_my_employee_profile(
     db: Session,
@@ -310,6 +336,7 @@ def update_my_employee_profile(
         else:
             employee.phone = phone.strip()
 
+    # Employee self-update intentionally cannot change region.
     try:
         db.commit()
     except IntegrityError:
@@ -321,6 +348,7 @@ def update_my_employee_profile(
 
     updated_employee = get_employee_or_404(db, employee_id)
     return serialize_employee(updated_employee)
+
 
 def deactivate_employee(
     db: Session,

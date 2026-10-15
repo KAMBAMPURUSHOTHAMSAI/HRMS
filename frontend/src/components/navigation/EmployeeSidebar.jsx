@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   UserRound,
@@ -10,12 +11,41 @@ import {
 import { NavLink } from "react-router-dom";
 
 const links = [
-  { to: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/employee/profile", label: "My Profile", icon: UserRound },
-  { to: "/employee/attendance", label: "Attendance", icon: Clock },
-  { to: "/employee/leaves", label: "My Leaves", icon: CalendarDays },
-  { to: "/employee/salary-slips", label: "Salary Slips", icon: ReceiptText },
-  { to: "/employee/notifications", label: "Notifications", icon: Bell },
+  {
+    to: "/employee/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    to: "/employee/profile",
+    label: "My Profile",
+    icon: UserRound,
+  },
+  {
+    to: "/employee/attendance",
+    label: "Attendance",
+    icon: Clock,
+  },
+  {
+    to: "/employee/holidays",
+    label: "Holiday Calendar",
+    icon: CalendarDays,
+  },
+  {
+    to: "/employee/leaves",
+    label: "My Leaves",
+    icon: CalendarDays,
+  },
+  {
+    to: "/employee/salary-slips",
+    label: "Salary Slips",
+    icon: ReceiptText,
+  },
+  {
+    to: "/employee/notifications",
+    label: "Notifications",
+    icon: Bell,
+  },
 ];
 
 export default function EmployeeSidebar() {

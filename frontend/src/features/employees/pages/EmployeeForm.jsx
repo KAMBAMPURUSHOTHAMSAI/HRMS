@@ -19,6 +19,7 @@ const initialForm = {
   last_name: "",
   employee_code: "",
   phone: "",
+  region: "",
   department_id: "",
   designation_id: "",
   joining_date: "",
@@ -77,6 +78,7 @@ export default function EmployeeForm() {
             last_name: employeeData.last_name,
             employee_code: employeeData.employee_code,
             phone: employeeData.phone || "",
+            region: employeeData.region || "",
             department_id: String(employeeData.department_id),
             designation_id: String(employeeData.designation_id),
             joining_date: employeeData.joining_date,
@@ -146,6 +148,7 @@ export default function EmployeeForm() {
       first_name: form.first_name.trim(),
       last_name: form.last_name.trim(),
       phone: form.phone.trim() || null,
+      region: form.region.trim() || null,
       department_id: Number(form.department_id),
       designation_id: Number(form.designation_id),
       joining_date: form.joining_date,
@@ -325,6 +328,23 @@ export default function EmployeeForm() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="region">Work Region / State</label>
+            <input
+              id="region"
+              name="region"
+              type="text"
+              maxLength={120}
+              placeholder="e.g. Andhra Pradesh"
+              value={form.region}
+              onChange={handleChange}
+            />
+            <small>
+              Used to determine which regional holidays apply.
+              Use a consistent region name for employees in the same region.
+            </small>
           </div>
 
           <div className="form-field">

@@ -17,6 +17,12 @@ from app.api.v1.endpoints import (
     reports,
     audit_logs,
     documents,
+    holidays,
+    shifts,
+    salary_components,
+    employee_salary_components,
+    compensation_history,
+    payroll_component_lines,
 )
 
 
@@ -40,12 +46,24 @@ api_router.include_router(attendance.router)
 api_router.include_router(leave_types.router)
 api_router.include_router(leaves.router)
 
+
+# Holiday and calendar management
+api_router.include_router(holidays.router)
+
+# Shift and work schedule management
+api_router.include_router(shifts.router)
+
 # Documents
 api_router.include_router(documents.router)
 
 # Payroll and salary slips
 api_router.include_router(payroll.router)
+api_router.include_router(salary_components.router)
+api_router.include_router(employee_salary_components.router)
+api_router.include_router(compensation_history.router)
+api_router.include_router(payroll_component_lines.router)
 api_router.include_router(salary_slips.router)
+
 
 # Notifications, reports and auditing
 api_router.include_router(notifications.router)

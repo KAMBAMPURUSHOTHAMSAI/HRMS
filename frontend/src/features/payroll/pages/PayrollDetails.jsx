@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 
@@ -7,6 +7,7 @@ import {
   createPayrollAdjustment,
   getPayrollRun,
   getPayrollRunRecords,
+  getPayrollComponentLines,
   lockPayrollRun,
   simulateSalaryCredit,
 } from "../../../api/payrollApi";
@@ -42,6 +43,11 @@ export default function PayrollDetails() {
   const [run, setRun] = useState(null);
   const [records, setRecords] = useState([]);
 
+  const [expandedRecordId, setExpandedRecordId] = useState(null);
+  const [componentLinesByRecordId, setComponentLinesByRecordId] = useState({});
+  const [breakdownLoadingId, setBreakdownLoadingId] = useState(null);
+  const [breakdownErrors, setBreakdownErrors] = useState({});
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -73,6 +79,10 @@ export default function PayrollDetails() {
 
       setRun(runData);
       setRecords(getRecords(recordsData));
+      // Refresh the breakdown cache when payroll records are reloaded.
+      setComponentLinesByRecordId({});
+      setBreakdownErrors({});
+      setExpandedRecordId(null);
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -81,6 +91,9 @@ export default function PayrollDetails() {
 
       setRun(null);
       setRecords([]);
+      setComponentLinesByRecordId({});
+      setBreakdownErrors({});
+      setExpandedRecordId(null);
     } finally {
       setLoading(false);
     }
@@ -235,6 +248,44 @@ export default function PayrollDetails() {
     }
   }
 
+
+
+  async function toggleComponentBreakdown(recordId) {
+    if (expandedRecordId === recordId) {
+      setExpandedRecordId(null);
+      return;
+    }
+
+    setExpandedRecordId(recordId);
+
+    if (Object.prototype.hasOwnProperty.call(componentLinesByRecordId, recordId)) {
+      return;
+    }
+
+    setBreakdownLoadingId(recordId);
+    setBreakdownErrors((previous) => ({
+      ...previous,
+      [recordId]: "",
+    }));
+
+    try {
+      const result = await getPayrollComponentLines(recordId);
+      setComponentLinesByRecordId((previous) => ({
+        ...previous,
+        [recordId]: Array.isArray(result) ? result : [],
+      }));
+    } catch (err) {
+      setBreakdownErrors((previous) => ({
+        ...previous,
+        [recordId]:
+          err.response?.data?.detail ||
+          "Unable to load salary component breakdown.",
+      }));
+    } finally {
+      setBreakdownLoadingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <section className="container-fluid py-3">
@@ -384,41 +435,114 @@ export default function PayrollDetails() {
                     <th>Gross Salary</th>
                     <th>Net Salary</th>
                     <th>Credit Status</th>
+                    <th>Component Breakdown</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {records.map((record) => (
-                    <tr key={record.id}>
-                      <td>{record.employee_code}</td>
+                    <Fragment key={record.id}>
+                      <tr>
+                        <td>{record.employee_code}</td>
 
-                      <td>
-                        <div className="fw-semibold">
-                          {record.employee_name}
-                        </div>
+                        <td>
+                          <div className="fw-semibold">
+                            {record.employee_name}
+                          </div>
 
-                        <small className="text-muted">
-                          {record.employee_email}
-                        </small>
-                      </td>
+                          <small className="text-muted">
+                            {record.employee_email}
+                          </small>
+                        </td>
 
-                      <td>{formatCurrency(record.monthly_salary)}</td>
-                      <td>{record.eligible_working_days}</td>
-                      <td>{record.present_days}</td>
-                      <td>{record.paid_leave_days}</td>
-                      <td>{record.payable_days}</td>
-                      <td>{record.lop_days}</td>
-                      <td>{formatCurrency(record.lop_deduction)}</td>
-                      <td>{formatCurrency(record.other_earnings)}</td>
-                      <td>{formatCurrency(record.other_deductions)}</td>
-                      <td>{formatCurrency(record.gross_salary)}</td>
+                        <td>{formatCurrency(record.monthly_salary)}</td>
+                        <td>{record.eligible_working_days}</td>
+                        <td>{record.present_days}</td>
+                        <td>{record.paid_leave_days}</td>
+                        <td>{record.payable_days}</td>
+                        <td>{record.lop_days}</td>
+                        <td>{formatCurrency(record.lop_deduction)}</td>
+                        <td>{formatCurrency(record.other_earnings)}</td>
+                        <td>{formatCurrency(record.other_deductions)}</td>
+                        <td>{formatCurrency(record.gross_salary)}</td>
 
-                      <td className="fw-semibold">
-                        {formatCurrency(record.net_salary)}
-                      </td>
+                        <td className="fw-semibold">
+                          {formatCurrency(record.net_salary)}
+                        </td>
 
-                      <td>{record.credit_status}</td>
-                    </tr>
+                        <td>{record.credit_status}</td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => toggleComponentBreakdown(record.id)}
+                            disabled={breakdownLoadingId === record.id}
+                          >
+                            {breakdownLoadingId === record.id
+                              ? "Loading..."
+                              : expandedRecordId === record.id
+                                ? "Hide Breakdown"
+                                : "View Breakdown"}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {expandedRecordId === record.id && (
+                        <tr>
+                          <td colSpan={15}>
+                            <div className="p-3 bg-body-tertiary rounded">
+                              <h6 className="mb-3">
+                                Salary Component Breakdown — {record.employee_name}
+                              </h6>
+
+                              {breakdownErrors[record.id] && (
+                                <div className="alert alert-danger mb-2">
+                                  {breakdownErrors[record.id]}
+                                </div>
+                              )}
+
+                              {breakdownLoadingId === record.id ? (
+                                <p className="mb-0">Loading component details...</p>
+                              ) : breakdownErrors[record.id] ? null : (
+                                (componentLinesByRecordId[record.id] || []).length === 0 ? (
+                                  <p className="text-muted mb-0">
+                                    No component breakdown is available for this payroll record.
+                                  </p>
+                                ) : (
+                                  <div className="table-responsive">
+                                    <table className="table table-sm table-hover align-middle mb-0">
+                                      <thead>
+                                        <tr>
+                                          <th>Code</th>
+                                          <th>Component</th>
+                                          <th>Type</th>
+                                          <th>Amount</th>
+                                          <th>Taxable</th>
+                                          <th>Calculation Details</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(componentLinesByRecordId[record.id] || []).map((line) => (
+                                          <tr key={line.id}>
+                                            <td><code>{line.component_code}</code></td>
+                                            <td>{line.component_name}</td>
+                                            <td>{line.component_type}</td>
+                                            <td>{formatCurrency(line.amount)}</td>
+                                            <td>{line.is_taxable ? "Yes" : "No"}</td>
+                                            <td>{line.calculation_details || "—"}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

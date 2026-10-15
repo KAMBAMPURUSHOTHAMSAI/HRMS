@@ -29,6 +29,9 @@ import DesignationsPage from "../features/designations/pages/DesignationsPage";
 import AttendancePage from "../features/attendance/pages/AttendancePage";
 import AttendanceHistory from "../features/attendance/pages/AttendanceHistory";
 
+import HolidayCalendarPage from "../features/holidays/pages/HolidayCalendarPage";
+import ShiftManagementPage from "../features/shifts/pages/ShiftManagementPage";
+
 import ApplyLeave from "../features/leaves/pages/ApplyLeave";
 import MyLeaves from "../features/leaves/pages/MyLeaves";
 import LeaveApprovals from "../features/leaves/pages/LeaveApprovals";
@@ -45,6 +48,8 @@ import MyProfile from "../features/profile/pages/MyProfile";
 
 import ReportsPage from "../features/reports/pages/ReportsPage";
 import AuditLogsPage from "../features/audit-logs/pages/AuditLogsPage";
+import SalaryComponentsPage from "../features/payroll/pages/SalaryComponentsPage";
+import EmployeeSalaryStructurePage from "../features/payroll/pages/EmployeeSalaryStructurePage";
 
 
 function DashboardRedirect() {
@@ -146,6 +151,19 @@ export const router = createBrowserRouter([
                 path: "attendance",
                 element: <AttendancePage />,
               },
+
+              // Holiday Management
+              {
+                path: "holidays",
+                element: <HolidayCalendarPage mode="admin" />,
+              },
+
+              // Shift and Work Schedule Management
+              {
+                path: "shifts",
+                element: <ShiftManagementPage />,
+              },
+
               {
                 path: "leave-types",
                 element: <LeaveTypesPage />,
@@ -161,6 +179,14 @@ export const router = createBrowserRouter([
               {
                 path: "payroll/:runId",
                 element: <PayrollDetails />,
+              },
+              {
+                path: "salary-components",
+                element: <SalaryComponentsPage />,
+              },
+              {
+                path: "employee-salary-structure",
+                element: <EmployeeSalaryStructurePage />,
               },
               {
                 path: "salary-slips",
@@ -213,6 +239,10 @@ export const router = createBrowserRouter([
               {
                 path: "attendance",
                 element: <AttendanceHistory />,
+              },
+              {
+                path: "holidays",
+                element: <HolidayCalendarPage mode="employee" />,
               },
               {
                 path: "leaves",

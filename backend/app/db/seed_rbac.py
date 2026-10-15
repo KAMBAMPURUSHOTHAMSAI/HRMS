@@ -52,6 +52,12 @@ PERMISSIONS = {
     "LEAVES.APPROVE": "Approve leave requests",
     "LEAVES.REJECT": "Reject leave requests",
 
+    
+    "HOLIDAYS.READ_SELF": "View holidays available to self",
+    "HOLIDAYS.READ_ALL": "View all company holidays",
+    "HOLIDAYS.MANAGE": "Create, update and deactivate holidays",
+    "HOLIDAYS.SELECT": "Select or cancel own optional holidays",
+
     "PAYROLL.GENERATE": "Generate payroll runs",
     "PAYROLL.READ_RUNS": "View payroll runs",
     "PAYROLL.READ_RECORDS": "View payroll records",
@@ -59,6 +65,9 @@ PERMISSIONS = {
     "PAYROLL.ADJUST": "Create payroll adjustments",
     "PAYROLL.FINALIZE": "Finalize payroll",
     "PAYROLL.SIMULATE_CREDIT": "Simulate payroll credit",
+    "PAYROLL.COMPONENTS_READ": "View salary components and assignments",
+    "PAYROLL.COMPONENTS_MANAGE": "Create and manage salary components and employee assignments",
+    "PAYROLL.COMPENSATION_MANAGE": "Create and manage employee compensation revisions",
 
     "SALARY_SLIPS.GENERATE": "Generate salary slips",
     "SALARY_SLIPS.READ_ALL": "View all salary slips",
@@ -69,6 +78,13 @@ PERMISSIONS = {
     "NOTIFICATIONS.UPDATE_SELF": "Update own notification read status",
     "NOTIFICATIONS.EMAIL_LOGS_READ": "View email delivery logs",
     "NOTIFICATIONS.EMAIL_RETRY": "Retry failed email delivery",
+
+    "NOTIFICATIONS.BROADCAST": "Send organization or department notification broadcasts",
+
+    
+    "SHIFTS.READ": "View configured shifts and shift assignment history",
+    "SHIFTS.MANAGE": "Create, update and deactivate work shifts",
+    "SHIFTS.ASSIGN": "Assign shifts to employees and departments",
 
     "DOCUMENTS.READ_SELF": "View own documents",
     "DOCUMENTS.UPLOAD_SELF": "Upload own documents",
@@ -108,13 +124,25 @@ HR_PERMISSIONS = {
 } | {
     "USERS.READ",
     "USERS.UPDATE",
+    
+    "HOLIDAYS.READ_ALL",
+    "HOLIDAYS.MANAGE",
+
     "PAYROLL.GENERATE",
     "PAYROLL.READ_RUNS",
     "PAYROLL.READ_RECORDS",
+    "PAYROLL.COMPONENTS_READ",
+    "PAYROLL.COMPONENTS_MANAGE",
+    "PAYROLL.COMPENSATION_MANAGE",
     "SALARY_SLIPS.GENERATE",
     "SALARY_SLIPS.READ_ALL",
     "SALARY_SLIPS.DOWNLOAD",
     "NOTIFICATIONS.EMAIL_LOGS_READ",
+    
+    "SHIFTS.READ",
+    "SHIFTS.MANAGE",
+    "SHIFTS.ASSIGN",
+
     "DOCUMENTS.READ_ALL",
     "DOCUMENTS.UPLOAD_FOR_EMPLOYEE",
     "DOCUMENTS.DOWNLOAD",
@@ -132,6 +160,10 @@ EMPLOYEE_PERMISSIONS = {
     "ATTENDANCE.CHECK_OUT",
     "ATTENDANCE.READ_SELF",
     "LEAVE_TYPES.READ",
+    
+    "HOLIDAYS.READ_SELF",
+    "HOLIDAYS.SELECT",
+
     "LEAVES.APPLY",
     "LEAVES.READ_SELF",
     "LEAVES.READ_BALANCES_SELF",

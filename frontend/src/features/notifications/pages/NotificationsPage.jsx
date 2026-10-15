@@ -8,6 +8,10 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCw,
+  Settings2,
+  Save,
+  Send,
+  Users,
 } from "lucide-react";
 
 import {
@@ -17,17 +21,42 @@ import {
   markAllNotificationsRead,
   getEmailDeliveryLogs,
   retryEmailDelivery,
+  getMyNotificationPreferences,
+  updateMyNotificationPreferences,
+  sendAdminBroadcast,
 } from "../../../api/notificationApi";
 
+import { getDepartments } from "../../../api/departmentApi";
 import { useAuth } from "../../../hooks/useAuth";
 
 const PAGE_SIZE = 20;
 const EMAIL_LOG_LIMIT = 100;
 
+const DEFAULT_PREFERENCES = {
+  in_app_enabled: true,
+  leave_updates_enabled: true,
+  payroll_updates_enabled: true,
+  attendance_alerts_enabled: true,
+  announcements_enabled: true,
+  other_updates_enabled: true,
+};
+
 function getArray(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.items)) return data.items;
   return [];
+}
+
+function getErrorMessage(error, fallback) {
+  const detail = error?.response?.data?.detail;
+
+  if (typeof detail === "string") return detail;
+
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || "Invalid input").join(", ");
+  }
+
+  return error?.message || fallback;
 }
 
 function formatDate(value) {
@@ -66,13 +95,45 @@ function emailStatusClass(status) {
   }
 }
 
-function getErrorMessage(error, fallback) {
-  return (
-    error?.response?.data?.detail ||
-    error?.message ||
-    fallback
-  );
-}
+const PREFERENCE_FIELDS = [
+  {
+    key: "in_app_enabled",
+    label: "Enable in-app notifications",
+    description: "Master switch for all in-app notifications.",
+  },
+  {
+    key: "leave_updates_enabled",
+    label: "Leave updates",
+    description: "Leave application, approval and rejection alerts.",
+  },
+  {
+    key: "payroll_updates_enabled",
+    label: "Payroll updates",
+    description: "Payroll processing and salary slip notifications.",
+  },
+  {
+    key: "attendance_alerts_enabled",
+    label: "Attendance alerts",
+    description: "Attendance-related notifications and reminders.",
+  },
+  {
+    key: "announcements_enabled",
+    label: "Admin announcements",
+    description: "Broadcast messages from the HRMS administrator.",
+  },
+  {
+    key: "other_updates_enabled",
+    label: "Other updates",
+    description: "Other HRMS notification categories.",
+  },
+];
+
+const EMPTY_BROADCAST = {
+  title: "",
+  message: "",
+  scope: "ALL",
+  department_ids: [],
+};
 
 export default function NotificationsPage({ mode = "employee" }) {
   const { user } = useAuth();
@@ -88,6 +149,20 @@ export default function NotificationsPage({ mode = "employee" }) {
   const [emailLogs, setEmailLogs] = useState([]);
   const [emailStatusFilter, setEmailStatusFilter] = useState("");
   const [emailLogsLoading, setEmailLogsLoading] = useState(false);
+
+  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesError, setPreferencesError] = useState("");
+  const [preferencesMessage, setPreferencesMessage] = useState("");
+
+  const [departments, setDepartments] = useState([]);
+  const [departmentsError, setDepartmentsError] = useState([]);
+
+  const [broadcast, setBroadcast] = useState(EMPTY_BROADCAST);
+  const [broadcastSaving, setBroadcastSaving] = useState(false);
+  const [broadcastError, setBroadcastError] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);
@@ -116,9 +191,7 @@ export default function NotificationsPage({ mode = "employee" }) {
       ]);
 
     if (notificationsResult.status === "fulfilled") {
-      setNotifications(
-        getArray(notificationsResult.value)
-      );
+      setNotifications(getArray(notificationsResult.value));
     } else {
       setNotifications([]);
       setError(
@@ -169,15 +242,65 @@ export default function NotificationsPage({ mode = "employee" }) {
     }
   }, [isAdminPage, emailStatusFilter]);
 
+  const loadPreferences = useCallback(async () => {
+    setPreferencesLoading(true);
+    setPreferencesError("");
+
+    try {
+      const data = await getMyNotificationPreferences();
+
+      setPreferences({
+        ...DEFAULT_PREFERENCES,
+        ...data,
+      });
+    } catch (err) {
+      setPreferencesError(
+        getErrorMessage(
+          err,
+          "Unable to load notification preferences."
+        )
+      );
+    } finally {
+      setPreferencesLoading(false);
+    }
+  }, []);
+
+  const loadDepartments = useCallback(async () => {
+    if (!isAdminPage || !isAdmin) return;
+
+    setDepartmentsError("");
+
+    try {
+      const data = await getDepartments();
+
+      setDepartments(
+        getArray(data).filter((department) => department.is_active)
+      );
+    } catch (err) {
+      setDepartments([]);
+      setDepartmentsError(
+        getErrorMessage(err, "Unable to load departments.")
+      );
+    }
+  }, [isAdminPage, isAdmin]);
+
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
 
   useEffect(() => {
     if (isAdminPage) {
       loadEmailLogs();
     }
   }, [isAdminPage, loadEmailLogs]);
+
+  useEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -189,7 +312,11 @@ export default function NotificationsPage({ mode = "employee" }) {
     try {
       await Promise.all([
         loadNotifications(),
+        loadPreferences(),
         isAdminPage ? loadEmailLogs() : Promise.resolve(),
+        isAdmin && isAdminPage
+          ? loadDepartments()
+          : Promise.resolve(),
       ]);
     } finally {
       setRefreshing(false);
@@ -214,7 +341,11 @@ export default function NotificationsPage({ mode = "employee" }) {
         setNotifications((current) =>
           current.map((item) =>
             item.id === notification.id
-              ? { ...item, is_read: true, read_at: new Date().toISOString() }
+              ? {
+                  ...item,
+                  is_read: true,
+                  read_at: new Date().toISOString(),
+                }
               : item
           )
         );
@@ -302,6 +433,150 @@ export default function NotificationsPage({ mode = "employee" }) {
     setError("");
   }
 
+  function handlePreferenceChange(key, checked) {
+    setPreferences((current) => ({
+      ...current,
+      [key]: checked,
+    }));
+
+    setPreferencesMessage("");
+    setPreferencesError("");
+  }
+
+  async function handleSavePreferences(event) {
+    event.preventDefault();
+
+    setPreferencesSaving(true);
+    setPreferencesError("");
+    setPreferencesMessage("");
+
+    try {
+      const saved = await updateMyNotificationPreferences(
+        preferences
+      );
+
+      setPreferences({
+        ...DEFAULT_PREFERENCES,
+        ...saved,
+      });
+
+      setPreferencesMessage(
+        "Notification preferences saved successfully."
+      );
+    } catch (err) {
+      setPreferencesError(
+        getErrorMessage(
+          err,
+          "Unable to save notification preferences."
+        )
+      );
+    } finally {
+      setPreferencesSaving(false);
+    }
+  }
+
+  function handleBroadcastChange(event) {
+    const { name, value } = event.target;
+
+    setBroadcast((current) => {
+      if (name === "scope") {
+        return {
+          ...current,
+          scope: value,
+          department_ids: [],
+        };
+      }
+
+      return {
+        ...current,
+        [name]: value,
+      };
+    });
+
+    setBroadcastError("");
+    setBroadcastMessage("");
+  }
+
+  function handleDepartmentToggle(departmentId, checked) {
+    setBroadcast((current) => {
+      const currentIds = current.department_ids;
+
+      return {
+        ...current,
+        department_ids: checked
+          ? [...new Set([...currentIds, departmentId])]
+          : currentIds.filter((id) => id !== departmentId),
+      };
+    });
+
+    setBroadcastError("");
+    setBroadcastMessage("");
+  }
+
+  async function handleSendBroadcast(event) {
+    event.preventDefault();
+
+    setBroadcastError("");
+    setBroadcastMessage("");
+
+    if (broadcast.scope === "DEPARTMENTS") {
+      if (broadcast.department_ids.length === 0) {
+        setBroadcastError("Select at least one department.");
+        return;
+      }
+
+      if (
+        !broadcast.department_ids.every((id) =>
+          departments.some((department) => department.id === id)
+        )
+      ) {
+        setBroadcastError(
+          "A selected department is no longer available. Refresh and try again."
+        );
+        return;
+      }
+    }
+
+    const confirmed = window.confirm(
+      broadcast.scope === "ALL"
+        ? "Send this announcement to all active user accounts?"
+        : `Send this announcement to employees in ${broadcast.department_ids.length} selected department(s)?`
+    );
+
+    if (!confirmed) return;
+
+    setBroadcastSaving(true);
+
+    try {
+      const result = await sendAdminBroadcast({
+        title: broadcast.title.trim(),
+        message: broadcast.message.trim(),
+        scope: broadcast.scope,
+        department_ids:
+          broadcast.scope === "DEPARTMENTS"
+            ? broadcast.department_ids
+            : [],
+      });
+
+      setBroadcastMessage(
+        `${result.message} Targeted: ${result.target_count}; created: ${result.notifications_created}; skipped by preferences: ${result.skipped_by_preferences}.`
+      );
+
+      setBroadcast({
+        ...EMPTY_BROADCAST,
+        department_ids: [],
+      });
+
+      await loadNotifications();
+    } catch (err) {
+      setBroadcastError(
+        getErrorMessage(err, "Unable to send the announcement.")
+      );
+    } finally {
+      setBroadcastSaving(false);
+    }
+  }
+
   return (
     <section className="container-fluid py-3">
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -312,8 +587,8 @@ export default function NotificationsPage({ mode = "employee" }) {
 
           <p className="text-muted mb-0">
             {isAdminPage
-              ? "Review your notifications and monitor email delivery."
-              : "View updates and keep track of important HR activities."}
+              ? "Review notifications, manage broadcasts and monitor email delivery."
+              : "View updates and manage your notification preferences."}
           </p>
         </div>
 
@@ -328,13 +603,8 @@ export default function NotificationsPage({ mode = "employee" }) {
         </button>
       </div>
 
-      {error && (
-        <div className="alert alert-danger">{error}</div>
-      )}
-
-      {message && (
-        <div className="alert alert-success">{message}</div>
-      )}
+      {error && <div className="alert alert-danger">{error}</div>}
+      {message && <div className="alert alert-success">{message}</div>}
 
       <div className="row g-3 mb-4">
         <div className="col-sm-6 col-xl-4">
@@ -360,6 +630,241 @@ export default function NotificationsPage({ mode = "employee" }) {
         )}
       </div>
 
+      {/* Notification preferences for the authenticated user */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <Settings2 size={21} className="text-primary" />
+            <div>
+              <h5 className="mb-1">Notification Preferences</h5>
+              <p className="text-muted small mb-0">
+                Control which categories can create in-app notifications.
+                Email settings are managed separately.
+              </p>
+            </div>
+          </div>
+
+          {preferencesError && (
+            <div className="alert alert-danger">
+              {preferencesError}
+            </div>
+          )}
+
+          {preferencesMessage && (
+            <div className="alert alert-success">
+              {preferencesMessage}
+            </div>
+          )}
+
+          {preferencesLoading ? (
+            <p>Loading preferences...</p>
+          ) : (
+            <form onSubmit={handleSavePreferences}>
+              <div className="row g-3">
+                {PREFERENCE_FIELDS.map((field) => (
+                  <div className="col-md-6" key={field.key}>
+                    <div className="border rounded p-3 h-100">
+                      <label
+                        className="form-check d-flex align-items-start gap-2 mb-0"
+                        htmlFor={`preference-${field.key}`}
+                      >
+                        <input
+                          id={`preference-${field.key}`}
+                          type="checkbox"
+                          className="form-check-input mt-1"
+                          checked={Boolean(preferences[field.key])}
+                          onChange={(event) =>
+                            handlePreferenceChange(
+                              field.key,
+                              event.target.checked
+                            )
+                          }
+                        />
+
+                        <span>
+                          <strong className="d-block">
+                            {field.label}
+                          </strong>
+                          <small className="text-muted">
+                            {field.description}
+                          </small>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="d-flex justify-content-end mt-3">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={preferencesSaving || preferencesLoading}
+                >
+                  <Save size={16} className="me-2" />
+                  {preferencesSaving ? "Saving..." : "Save Preferences"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Admin-only announcement broadcast */}
+      {isAdminPage && isAdmin && (
+        <div className="card mb-4">
+          <div className="card-body">
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <Send size={21} className="text-primary" />
+              <div>
+                <h5 className="mb-1">Broadcast Announcement</h5>
+                <p className="text-muted small mb-0">
+                  Send an in-app announcement to the organization or
+                  selected departments. This form does not send email.
+                </p>
+              </div>
+            </div>
+
+            {broadcastError && (
+              <div className="alert alert-danger">
+                {broadcastError}
+              </div>
+            )}
+
+            {broadcastMessage && (
+              <div className="alert alert-success">
+                {broadcastMessage}
+              </div>
+            )}
+
+            {departmentsError && (
+              <div className="alert alert-warning">
+                {departmentsError}
+              </div>
+            )}
+
+            <form onSubmit={handleSendBroadcast}>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label" htmlFor="broadcast-title">
+                    Announcement title *
+                  </label>
+                  <input
+                    id="broadcast-title"
+                    name="title"
+                    className="form-control"
+                    minLength={2}
+                    maxLength={200}
+                    value={broadcast.title}
+                    onChange={handleBroadcastChange}
+                    required
+                  />
+                </div>
+
+                <div className="col-md-6">
+                  <label className="form-label" htmlFor="broadcast-scope">
+                    Recipients *
+                  </label>
+                  <select
+                    id="broadcast-scope"
+                    name="scope"
+                    className="form-select"
+                    value={broadcast.scope}
+                    onChange={handleBroadcastChange}
+                  >
+                    <option value="ALL">Entire organization</option>
+                    <option value="DEPARTMENTS">
+                      Selected departments
+                    </option>
+                  </select>
+                </div>
+
+                {broadcast.scope === "DEPARTMENTS" && (
+                  <div className="col-12">
+                    <label className="form-label">
+                      Select departments *
+                    </label>
+
+                    {departments.length === 0 ? (
+                      <p className="text-muted small">
+                        No active departments are available.
+                      </p>
+                    ) : (
+                      <div className="row g-2">
+                        {departments.map((department) => (
+                          <div
+                            className="col-md-6 col-xl-4"
+                            key={department.id}
+                          >
+                            <label className="form-check border rounded p-3 ps-5 h-100">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked={broadcast.department_ids.includes(
+                                  department.id
+                                )}
+                                onChange={(event) =>
+                                  handleDepartmentToggle(
+                                    department.id,
+                                    event.target.checked
+                                  )
+                                }
+                              />
+                              <span className="form-check-label">
+                                <Users size={15} className="me-2" />
+                                {department.name}
+                              </span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="col-12">
+                  <label
+                    className="form-label"
+                    htmlFor="broadcast-message"
+                  >
+                    Announcement message *
+                  </label>
+                  <textarea
+                    id="broadcast-message"
+                    name="message"
+                    className="form-control"
+                    rows={4}
+                    minLength={2}
+                    maxLength={5000}
+                    value={broadcast.message}
+                    onChange={handleBroadcastChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-end mt-3">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={
+                    broadcastSaving ||
+                    (
+                      broadcast.scope === "DEPARTMENTS" &&
+                      departments.length === 0
+                    )
+                  }
+                >
+                  <Send size={16} className="me-2" />
+                  {broadcastSaving ? "Sending..." : "Send Announcement"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Existing notification inbox */}
       <div className="card mb-4">
         <div className="card-body">
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
@@ -378,9 +883,7 @@ export default function NotificationsPage({ mode = "employee" }) {
                   checked={unreadOnly}
                   onChange={handleUnreadFilterChange}
                 />
-                <span className="form-check-label">
-                  Unread only
-                </span>
+                <span className="form-check-label">Unread only</span>
               </label>
 
               <button
@@ -428,18 +931,13 @@ export default function NotificationsPage({ mode = "employee" }) {
                         </span>
                       </div>
 
-                      <p className="mb-2">
-                        {notification.message}
-                      </p>
+                      <p className="mb-2">{notification.message}</p>
 
                       <div className="text-muted small">
                         <span className="me-3">
                           Type: {notification.event_type}
                         </span>
-
-                        <span>
-                          {formatDate(notification.created_at)}
-                        </span>
+                        <span>{formatDate(notification.created_at)}</span>
                       </div>
                     </div>
 
@@ -473,17 +971,13 @@ export default function NotificationsPage({ mode = "employee" }) {
               Previous
             </button>
 
-            <span className="text-muted small">
-              Page {page + 1}
-            </span>
+            <span className="text-muted small">Page {page + 1}</span>
 
             <button
               type="button"
               className="btn btn-outline-secondary"
               onClick={() => setPage((current) => current + 1)}
-              disabled={
-                loading || notifications.length < PAGE_SIZE
-              }
+              disabled={loading || notifications.length < PAGE_SIZE}
             >
               Next
               <ChevronRight size={16} className="ms-1" />
@@ -492,6 +986,7 @@ export default function NotificationsPage({ mode = "employee" }) {
         </div>
       </div>
 
+      {/* Existing Admin email delivery logs and retry actions */}
       {isAdminPage && (
         <div className="card">
           <div className="card-body">
@@ -499,7 +994,7 @@ export default function NotificationsPage({ mode = "employee" }) {
               <div>
                 <h5 className="mb-1">Email Delivery Logs</h5>
                 <p className="text-muted small mb-0">
-                  View the delivery status and retry eligible emails.
+                  View delivery status and retry eligible emails.
                 </p>
               </div>
 
@@ -577,16 +1072,13 @@ export default function NotificationsPage({ mode = "employee" }) {
                           <td>{log.recipient_email}</td>
                           <td>{log.subject}</td>
                           <td>{log.template_name}</td>
-
                           <td>
                             <span className={emailStatusClass(log.status)}>
                               {log.status}
                             </span>
                           </td>
-
                           <td>{log.attempt_count}</td>
                           <td>{formatDate(log.created_at)}</td>
-
                           <td style={{ minWidth: "180px" }}>
                             {log.error_message || "—"}
                           </td>
@@ -598,9 +1090,7 @@ export default function NotificationsPage({ mode = "employee" }) {
                                   type="button"
                                   className="btn btn-sm btn-outline-primary"
                                   onClick={() => handleRetryEmail(log)}
-                                  disabled={
-                                    actionId === `email-${log.id}`
-                                  }
+                                  disabled={actionId === `email-${log.id}`}
                                 >
                                   <RotateCw size={14} className="me-1" />
                                   {actionId === `email-${log.id}`
