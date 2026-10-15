@@ -315,10 +315,11 @@ def _load_shift_overtime_by_employee_day(
             )
         )
 
+    # ShiftAssignment is defined in its own module and does not expose a
+    # SQLAlchemy `shift` relationship in this project. Load Shift records by
+    # shift_id explicitly so payroll does not depend on a missing relationship.
     assignments = list(db.scalars(
-        select(ShiftAssignment)
-        .options(selectinload(ShiftAssignment.shift))
-        .where(
+        select(ShiftAssignment).where(
             ShiftAssignment.effective_from <= period_end,
             or_(
                 ShiftAssignment.effective_to.is_(None),
@@ -327,6 +328,13 @@ def _load_shift_overtime_by_employee_day(
             or_(*assignment_scope),
         )
     ).all())
+    shift_ids = sorted({assignment.shift_id for assignment in assignments})
+    shifts_by_id = {}
+    if shift_ids:
+        shifts_by_id = {
+            shift.id: shift
+            for shift in db.scalars(select(Shift).where(Shift.id.in_(shift_ids))).all()
+        }
 
     result: dict[tuple[int, date], dict[str, object]] = {}
 
@@ -367,7 +375,7 @@ def _load_shift_overtime_by_employee_day(
             ),
             reverse=True,
         )
-        shift = matching_assignments[0].shift
+        shift = shifts_by_id.get(matching_assignments[0].shift_id)
         if shift is None or not shift.is_active:
             continue
 
